@@ -245,6 +245,16 @@
 
   .ag-field{ margin-bottom:12px; }
   .ag-field label{ font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.4px; }
+  .ag-field.has-suggest{ position:relative; }
+  .ag-suggest-list{
+    position:absolute; left:0; right:0; top:100%; margin-top:2px;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 6px 18px rgba(16,45,44,.14); max-height:180px; overflow-y:auto; z-index:5;
+  }
+  .ag-suggest-item{ padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--line-soft); }
+  .ag-suggest-item:last-child{ border-bottom:none; }
+  .ag-suggest-item .sgname{ font-size:13px; font-weight:700; color:var(--ink); }
+  .ag-suggest-item .sgmeta{ font-size:11px; color:var(--ink-soft); margin-top:1px; }
   .ag-field input, .ag-field select{
     width:100%; margin-top:5px; padding:10px 10px; border-radius:9px;
     border:1px solid var(--line); font-size:14px; font-family:inherit; background:#F9FBFB;
@@ -754,6 +764,15 @@
   }
 
   // ---------- Panel nueva / editar ----------
+  function getKnownPatients(){
+    const map = new Map();
+    appts.filter(a=>!a.isBlock && a.name).forEach(a=>{
+      const key = a.name.trim().toLowerCase();
+      map.set(key, { name: a.name, phone: a.phone||'', type: a.type||'' });
+    });
+    return Array.from(map.values());
+  }
+
   function openPanel(existing, prefillDuration){
     const overlay = document.createElement('div');
     overlay.className='ag-panel-overlay';
@@ -770,9 +789,10 @@
           <div class="ag-mode-tab ${!isPatient?'sel':''}" data-mode="bloqueo">🔒 Bloqueo</div>
         </div>
 
-        <div class="ag-field">
+        <div class="ag-field has-suggest">
           <label id="agNameLabel">${nameLabel}</label>
-          <input id="agName" type="text" placeholder="${namePlaceholder}" value="${existing? escapeHtml(existing.name):''}"/>
+          <input id="agName" type="text" placeholder="${namePlaceholder}" value="${existing? escapeHtml(existing.name):''}" autocomplete="off"/>
+          <div class="ag-suggest-list" id="agSuggestList" style="display:none;"></div>
         </div>
 
         <div class="ag-field ag-only-patient" style="${isPatient?'':'display:none'}">
@@ -845,6 +865,46 @@
     overlay.querySelectorAll('.ag-mode-tab').forEach(tab=>{
       tab.addEventListener('click', ()=> toggleMode(tab.getAttribute('data-mode')));
     });
+
+    // Autocompletar paciente ya agendado antes
+    if(!existing){
+      const nameInput = overlay.querySelector('#agName');
+      const suggestBox = overlay.querySelector('#agSuggestList');
+      const knownPatients = getKnownPatients();
+      nameInput.addEventListener('input', ()=>{
+        if(panelMode !== 'paciente'){ suggestBox.style.display='none'; return; }
+        const q = nameInput.value.trim().toLowerCase();
+        if(!q){ suggestBox.style.display='none'; return; }
+        const matches = knownPatients.filter(p=> p.name.toLowerCase().includes(q)).slice(0,6);
+        if(matches.length===0){ suggestBox.style.display='none'; return; }
+        suggestBox.innerHTML = matches.map(p=>`
+          <div class="ag-suggest-item" data-name="${escapeHtml(p.name)}" data-phone="${escapeHtml(p.phone)}" data-type="${escapeHtml(p.type)}">
+            <div class="sgname">${escapeHtml(p.name)}</div>
+            ${p.phone? `<div class="sgmeta">${escapeHtml(p.phone)}</div>` : ''}
+          </div>
+        `).join('');
+        suggestBox.style.display='block';
+        suggestBox.querySelectorAll('.ag-suggest-item').forEach(item=>{
+          item.addEventListener('click', ()=>{
+            nameInput.value = item.getAttribute('data-name');
+            const phoneVal = item.getAttribute('data-phone');
+            const typeVal = item.getAttribute('data-type');
+            const phoneInput = overlay.querySelector('#agPhone');
+            if(phoneInput && phoneVal) phoneInput.value = phoneVal;
+            if(typeVal){
+              chosenType = typeVal;
+              overlay.querySelectorAll('.ag-type-chip').forEach(c=>{
+                c.classList.toggle('sel', c.getAttribute('data-type')===typeVal);
+              });
+            }
+            suggestBox.style.display='none';
+          });
+        });
+      });
+      nameInput.addEventListener('blur', ()=>{
+        setTimeout(()=>{ suggestBox.style.display='none'; }, 150);
+      });
+    }
 
     overlay.querySelectorAll('.ag-type-chip').forEach(chip=>{
       chip.addEventListener('click', ()=>{
