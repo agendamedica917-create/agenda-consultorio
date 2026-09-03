@@ -716,6 +716,9 @@
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
+  function capitalizeWords(s){
+    return s.split(' ').map(w => w ? (w.charAt(0).toUpperCase() + w.slice(1)) : w).join(' ');
+  }
 
   // ---------- Huecos disponibles ----------
   // Si el punto tocado cae dentro de una cita/bloqueo existente, avanza hasta el siguiente hueco libre.
@@ -845,6 +848,12 @@
       tab.addEventListener('click', ()=> toggleMode(tab.getAttribute('data-mode')));
     });
 
+    // Capitaliza la inicial de cada palabra del nombre al salir del campo
+    const agNameField = overlay.querySelector('#agName');
+    agNameField.addEventListener('blur', ()=>{
+      agNameField.value = capitalizeWords(agNameField.value);
+    });
+
     // Autocompletar paciente ya agendado antes
     if(!existing){
       const nameInput = overlay.querySelector('#agName');
@@ -854,7 +863,7 @@
         if(panelMode !== 'paciente'){ suggestBox.style.display='none'; return; }
         const q = nameInput.value.trim().toLowerCase();
         if(!q){ suggestBox.style.display='none'; return; }
-        const matches = knownPatients.filter(p=> p.name.toLowerCase().includes(q)).slice(0,6);
+        const matches = knownPatients.filter(p=> p.name.toLowerCase().split(' ').some(w=>w.startsWith(q))).slice(0,6);
         if(matches.length===0){ suggestBox.style.display='none'; return; }
         suggestBox.innerHTML = matches.map(p=>`
           <div class="ag-suggest-item" data-name="${escapeHtml(p.name)}" data-phone="${escapeHtml(p.phone)}" data-type="${escapeHtml(p.type)}">
@@ -941,7 +950,7 @@
     }
 
     overlay.querySelector('#agSave').addEventListener('click', async ()=>{
-      const name = overlay.querySelector('#agName').value.trim();
+      const name = capitalizeWords(overlay.querySelector('#agName').value.trim());
       if(!name){ overlay.querySelector('#agName').focus(); return; }
       const timeVal = overlay.querySelector('#agStart').value;
       const duration = parseInt(overlay.querySelector('#agDuration').value,10);
