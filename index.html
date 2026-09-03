@@ -363,12 +363,6 @@
     {id:'cancelada',  label:'Cancelada',  icon:'✕', dim:true,  strike:true},
     {id:'no_asistio', label:'No asistió', icon:'⚠', dim:false, strike:false},
   ];
-  const RECUR_OPTIONS = [
-    {id:'none',     label:'No se repite'},
-    {id:'weekly',   label:'Cada semana'},
-    {id:'biweekly', label:'Cada 2 semanas'},
-    {id:'monthly',  label:'Cada mes'},
-  ];
   const DAY_START = 8*60;
   const DAY_END   = 22*60;
   const PX_PER_MIN = 1.4;
@@ -404,7 +398,6 @@
     return `${y}-${m}-${dd}`;
   }
   function addDays(d,n){ const nd = new Date(d); nd.setDate(nd.getDate()+n); return nd; }
-  function addMonths(d,n){ const nd = new Date(d); nd.setMonth(nd.getMonth()+n); return nd; }
 
   // ---------- Días festivos (México) ----------
   function nthWeekdayOfMonth(year, month, weekday, n){
@@ -831,20 +824,6 @@
           </div>
         </div>` : ''}
 
-        ${!existing ? `
-        <div class="ag-row2">
-          <div class="ag-field">
-            <label>Repetir</label>
-            <select id="agRepeat">
-              ${RECUR_OPTIONS.map(r=>`<option value="${r.id}">${r.label}</option>`).join('')}
-            </select>
-          </div>
-          <div class="ag-field" id="agRepeatCountWrap" style="display:none;">
-            <label>Repeticiones</label>
-            <input id="agRepeatCount" type="number" min="2" max="24" value="4"/>
-          </div>
-        </div>` : ''}
-
         <div class="ag-panel-actions">
           ${existing? '<button class="ag-btn danger" id="agDelete">Eliminar</button>' : ''}
           <button class="ag-btn ghost" id="agCancel">Cancelar</button>
@@ -921,12 +900,7 @@
       });
     });
 
-    const repeatSel = overlay.querySelector('#agRepeat');
-    if(repeatSel){
-      repeatSel.addEventListener('change', ()=>{
-        overlay.querySelector('#agRepeatCountWrap').style.display = repeatSel.value==='none' ? 'none' : '';
-      });
-    }
+
 
     function checkOverlapWarning(){
       const timeVal = overlay.querySelector('#agStart').value;
@@ -959,27 +933,10 @@
 
     if(existing){
       overlay.querySelector('#agDelete').addEventListener('click', async ()=>{
-        if(existing.recurrenceId){
-          openConfirm(
-            `"${existing.name}" es parte de una serie que se repite. ¿Qué quieres eliminar?`,
-            [
-              {label:'Solo esta', style:'primary', action: async ()=>{
-                appts = appts.filter(a=>a.id!==existing.id);
-                await saveState(); overlay.remove(); render();
-              }},
-              {label:'Toda la serie', style:'danger', action: async ()=>{
-                appts = appts.filter(a=>a.recurrenceId!==existing.recurrenceId);
-                await saveState(); overlay.remove(); render();
-              }},
-              {label:'Cancelar', style:'ghost', action: ()=>{}},
-            ]
-          );
-        } else {
-          appts = appts.filter(a=>a.id!==existing.id);
-          await saveState();
-          overlay.remove();
-          render();
-        }
+        appts = appts.filter(a=>a.id!==existing.id);
+        await saveState();
+        overlay.remove();
+        render();
       });
     }
 
@@ -1000,31 +957,13 @@
         if(isPatientMode){ a.type=chosenType; a.status=chosenStatus; a.phone=phone; delete a.note; }
         else { delete a.type; delete a.status; delete a.phone; delete a.note; }
       } else {
-        const repeatSelEl = overlay.querySelector('#agRepeat');
-        const repeatVal = repeatSelEl ? repeatSelEl.value : 'none';
-        const repeatCount = repeatSelEl ? Math.max(2, Math.min(24, parseInt(overlay.querySelector('#agRepeatCount').value,10) || 4)) : 1;
-        const dates = [pendingSlot.dateISO];
-        if(repeatVal !== 'none'){
-          let d0 = new Date(pendingSlot.dateISO+'T00:00:00');
-          for(let i=1;i<repeatCount;i++){
-            let nd;
-            if(repeatVal==='weekly') nd = addDays(d0, 7*i);
-            else if(repeatVal==='biweekly') nd = addDays(d0, 14*i);
-            else nd = addMonths(d0, i);
-            dates.push(fmtISO(nd));
-          }
-        }
-        const recurrenceId = dates.length>1 ? ('r'+Date.now()+Math.random().toString(16).slice(2)) : undefined;
-        dates.forEach(dateISO=>{
-          const item = {
-            id: 'a'+Date.now()+Math.random().toString(16).slice(2)+dateISO,
-            date: dateISO, startMin, duration, name,
-            isBlock: !isPatientMode,
-          };
-          if(recurrenceId) item.recurrenceId = recurrenceId;
-          if(isPatientMode){ item.type=chosenType; item.status=chosenStatus; item.phone=phone; }
-          appts.push(item);
-        });
+        const item = {
+          id: 'a'+Date.now()+Math.random().toString(16).slice(2),
+          date: pendingSlot.dateISO, startMin, duration, name,
+          isBlock: !isPatientMode,
+        };
+        if(isPatientMode){ item.type=chosenType; item.status=chosenStatus; item.phone=phone; }
+        appts.push(item);
       }
       await saveState();
       overlay.remove();
